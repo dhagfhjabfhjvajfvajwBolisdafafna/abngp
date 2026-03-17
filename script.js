@@ -1,3 +1,8 @@
+// Supabase setup
+const SUPABASE_URL = 'https://bjqcnvgunbljvradvoco.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJqcWNudmd1bmJsanZyYWR2b2NvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NTg3MjIsImV4cCI6MjA4OTMzNDcyMn0.lt5OQCuawVNb2I0s3cezs8Dhk8XEfoxZgx0nusy4WRA';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 const galleryItems = document.querySelectorAll('.gallery-item img');
 const lightbox = document.getElementById('lightbox');
 const lightboxImg = document.getElementById('lightbox-img');
@@ -32,11 +37,20 @@ const commentInput = document.getElementById('comment-input');
 const submitBtn = document.getElementById('submit-comment');
 const commentsContainer = document.getElementById('comments-container');
 
-// Load comments from localStorage
-function loadComments() {
-    const comments = JSON.parse(localStorage.getItem('comments')) || [];
+// Load comments from Supabase
+async function loadComments() {
+    const { data, error } = await supabase
+        .from('comments')
+        .select('*')
+        .order('created_at', { ascending: false });
+    
+    if (error) {
+        console.error('Error loading comments:', error);
+        return;
+    }
+    
     commentsContainer.innerHTML = '';
-    comments.forEach(comment => {
+    data.forEach(comment => {
         displayComment(comment);
     });
 }
@@ -45,10 +59,15 @@ function loadComments() {
 function displayComment(comment) {
     const commentDiv = document.createElement('div');
     commentDiv.className = 'comment';
+    const date = new Date(comment.created_at).toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric' 
+    });
     commentDiv.innerHTML = `
         <div class="comment-header">
             <span class="comment-author">${comment.name}</span>
-            <span class="comment-date">${comment.date}</span>
+            <span class="comment-date">${date}</span>
         </div>
         <div class="comment-text">${comment.text}</div>
     `;
@@ -56,29 +75,29 @@ function displayComment(comment) {
 }
 
 // Add new comment
-submitBtn.addEventListener('click', () => {
+submitBtn.addEventListener('click', async () => {
     const name = nameInput.value.trim();
     const text = commentInput.value.trim();
     
     if (name && text) {
-        const comment = {
-            name: name,
-            text: text,
-            date: new Date().toLocaleDateString('en-US', { 
-                month: 'short', 
-                day: 'numeric', 
-                year: 'numeric' 
-            })
-        };
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Posting...';
         
-        const comments = JSON.parse(localStorage.getItem('comments')) || [];
-        comments.unshift(comment);
-        localStorage.setItem('comments', JSON.stringify(comments));
+        const { error } = await supabase
+            .from('comments')
+            .insert([{ name, text }]);
         
-        nameInput.value = '';
-        commentInput.value = '';
+        if (error) {
+            console.error('Error posting comment:', error);
+            alert('Error posting comment. Please try again.');
+        } else {
+            nameInput.value = '';
+            commentInput.value = '';
+            await loadComments();
+        }
         
-        loadComments();
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Post Message';
     }
 });
 
